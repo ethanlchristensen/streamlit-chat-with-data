@@ -1,10 +1,10 @@
 import warnings
 warnings.filterwarnings("ignore")
 
-import openai
-openai.api_key = ""
+import dotenv
+dotenv.load_dotenv(override=True)
 
-import random
+import os
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
@@ -42,7 +42,7 @@ def init():
 
 def sidebar():
     with st.sidebar:
-        st.title("Data Explorer 📊")
+        colored_header(label="Data Explorer", description="Explore your data utilizing the power of LLM's", color_name="green-100")
         
         # Data upload section
         st.header("Upload Data")
@@ -171,7 +171,6 @@ def extract_dataframe_from_result(result_content):
     # If we couldn't find a DataFrame, return None
     return None, None
 
-
 async def query():
     """Handle user queries and process responses."""
     data_manager = st.session_state["data_manager"]
@@ -181,51 +180,43 @@ async def query():
     )
     
     if user_input:
-        # Add user message to history
         user_message = UserMessage(avatar=user_avatar, text=user_input)
         st.session_state["message_history"].add_user_message(user_message)
         
-        # Display user message
         with st.chat_message(name="user", avatar=user_avatar):
             st.markdown(user_input)
         
-        # Process with assistant
         assistant_message = AssistantMessage(avatar=bot_avatar)
         with st.chat_message(name="assistant", avatar=bot_avatar) as message_container:
             df = data_manager.df
             try:
-                async for result in df.ask.__aiter__(user_input, provider_type="ollama", model="gemma3:12b"):
+                async for result in df.ask.__aiter__(user_input, provider_type="openai", model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY")):
                     if result.kind == ResultKind.CODE_BLOCK:
+                        continue
                         assistant_message.add_code(code=result.content, language="python", title="Here is the code I generated.")
                     elif result.kind == ResultKind.DESCRIPTION:
+                        continue
                         assistant_message.add(content=result.content, title="Here is an overview of the code.")
                     elif result.kind == ResultKind.RESULT:
-                        # Check if result contains an error
                         if isinstance(result.content, dict) and "error" in result.content:
                             assistant_message.add_error(
                                 error_text=f"I encountered an error while processing your request:\n\n{result.content['error']}", 
                                 title="Error in Analysis"
                             )
                         else:
-                            # Extract DataFrame and title if result contains a DataFrame in different formats
                             df_content, df_title = extract_dataframe_from_result(result.content)
-                            
                             if df_content is not None:
-                                # Use the extracted title if available, or use default
                                 display_title = df_title or "Results Preview (First 5 Rows)"
                                 assistant_message.add_dataframe_preview(df_content, title=display_title)
                             else:
-                                # Just display the original result if no DataFrame found
                                 assistant_message.add(content=result.content)
                     
                     if (result.kind not in (ResultKind.START, ResultKind.END)):
-                        # Render the component after adding it
                         assistant_message.components[-1].render()
             except Exception as e:
                 import traceback
                 error_message = f"An unexpected error occurred: {str(e)}"
                 st.error(error_message)
-                # Add error to message history
                 assistant_message.add(content=error_message, title="Error")
                 assistant_message.components[-1].render()
         
