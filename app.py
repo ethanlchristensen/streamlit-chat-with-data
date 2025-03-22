@@ -192,10 +192,8 @@ async def query():
             try:
                 async for result in df.ask.__aiter__(user_input, provider_type="openai", model="gpt-4o-mini", api_key=os.getenv("OPENAI_API_KEY")):
                     if result.kind == ResultKind.CODE_BLOCK:
-                        continue
                         assistant_message.add_code(code=result.content, language="python", title="Here is the code I generated.")
                     elif result.kind == ResultKind.DESCRIPTION:
-                        continue
                         assistant_message.add(content=result.content, title="Here is an overview of the code.")
                     elif result.kind == ResultKind.RESULT:
                         if isinstance(result.content, dict) and "error" in result.content:
